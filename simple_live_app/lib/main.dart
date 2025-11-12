@@ -205,7 +205,7 @@ class MyApp extends StatelessWidget {
           Log.addDebugLog(text, (isError ?? false) ? Colors.red : Colors.grey);
           Log.writeLog(text, (isError ?? false) ? Level.error : Level.info);
         },
-        //debugShowCheckedModeBanner: false,
+        debugShowCheckedModeBanner: false,
         navigatorObservers: [FlutterSmartDialog.observer],
         builder: FlutterSmartDialog.init(
           loadingBuilder: ((msg) => const AppLoaddingWidget()),
