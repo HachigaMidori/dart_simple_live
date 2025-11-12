@@ -1,6 +1,6 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
+    id "org.jetbrains.kotlin.android"           // ← 用新版 Kotlin 插件 ID
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id "dev.flutter.flutter-gradle-plugin"
 }
@@ -13,15 +13,8 @@ if (localPropertiesFile.exists()) {
     }
 }
 
-def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
-if (flutterVersionCode == null) {
-    flutterVersionCode = "1"
-}
-
-def flutterVersionName = localProperties.getProperty("flutter.versionName")
-if (flutterVersionName == null) {
-    flutterVersionName = "1.0"
-}
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
+def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
 
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
@@ -34,56 +27,61 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    // ✅ 用 Java/Kotlin 17（Kotlin 2.x & AGP 8.x 要求）
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.xycz.simple_live"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         minSdk = flutter.minSdkVersion
-        multiDexEnabled true
         targetSdk = flutter.targetSdkVersion
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
+
+        multiDexEnabled true
     }
+
     packagingOptions {
         pickFirst 'lib/**/libc++_shared.so'
     }
-    signingConfigs {
-       release {
-           keyAlias keystoreProperties['keyAlias']
-           keyPassword keystoreProperties['keyPassword']
-           storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-           storePassword keystoreProperties['storePassword']
-           v1SigningEnabled true
-           v2SigningEnabled true
-       }
-    }
 
-    buildTypes {
-        buildTypes {
-            debug {
-                signingConfig signingConfigs.release
-            }
-            profile {
-                signingConfig signingConfigs.release
-            }
+    signingConfigs {
+        // 仅在存在 key.properties 时配置 release 签名；CI/调试环境可以没有这个文件
+        if (keystorePropertiesFile.exists()) {
             release {
-                signingConfig signingConfigs.release
-                minifyEnabled true
-                shrinkResources true
-                proguardFiles getDefaultProguardFile(
-                        'proguard-android-optimize.txt'),
-                        'proguard-rules.pro'
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+                storePassword keystoreProperties['storePassword']
+                v1SigningEnabled true
+                v2SigningEnabled true
             }
         }
     }
-}
 
-flutter {
-    source = "../.."
+    // ⚠️ 这里原来是 buildTypes 里又套了一层 buildTypes，已修正
+    buildTypes {
+        // Debug / Profile 不再强制用 release 签名（否则 CI 会因为没密钥而失败）
+        debug { /* 使用系统自带的 debug keystore（默认行为） */ }
+
+        profile {
+            // 如需和 debug 行为一致，可加 fallback
+            matchingFallbacks = ['debug']
+        }
+
+        release {
+            // 只有存在 release 签名配置时才使用；否则保持未配置状态（你现在主要打 debug 包）
+            if (signingConfigs.hasProperty('release')) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
 }
