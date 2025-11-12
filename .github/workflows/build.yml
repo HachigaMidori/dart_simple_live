@@ -3,8 +3,17 @@ name: Build Android & Windows
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [ master ]   # 你也可以只保留 workflow_dispatch
   pull_request:
+
+# 关键：让所有 shell 步骤默认在 simple_live_app/ 下运行
+defaults:
+  run:
+    working-directory: simple_live_app
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   android:
@@ -26,8 +35,10 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'   # 如需锁定版本，可加：flutter-version: '3.24.3'
+          channel: 'stable'
           cache: true
+          # 如项目版本有要求，可以固定版本：
+          # flutter-version: '3.22.3'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -38,31 +49,27 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      # 可选：确保 gradlew 可执行（有时不需要）
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # 关键：用 debug 构建（会用默认调试证书签名，可直接安装）
-      # 你已经在代码里屏蔽了 Debug 角标和日志按钮。
       - name: Build APK (debug)
         run: flutter build apk --debug --no-tree-shake-icons
 
-      - name: Upload APK artifact
+      - name: Upload APK artifact (debug)
         uses: actions/upload-artifact@v4
         with:
           name: android-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          # 注意：upload-artifact 的 path 以仓库根为基准，这里写绝对些最稳妥
+          path: ${{ github.workspace }}/simple_live_app/build/app/outputs/flutter-apk/app-debug.apk
 
-      # 如果你想“更接近发布体验”，也可以顺带打一个 profile 包（同样可直接安装）
-      - name: Build APK (profile)  # 可选
+      - name: Build APK (profile)
         run: flutter build apk --profile --no-tree-shake-icons
 
-      - name: Upload APK (profile)
-        if: always()
+      - name: Upload APK artifact (profile)
         uses: actions/upload-artifact@v4
         with:
           name: android-profile-apk
-          path: build/app/outputs/flutter-apk/app-profile.apk
+          path: ${{ github.workspace }}/simple_live_app/build/app/outputs/flutter-apk/app-profile.apk
 
   windows:
     name: Windows x64 (release)
@@ -79,6 +86,7 @@ jobs:
         with:
           channel: 'stable'
           cache: true
+          # flutter-version: '3.22.3'
 
       - name: Enable Windows desktop
         run: flutter config --enable-windows-desktop
@@ -101,4 +109,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-x64-release
-          path: SimpleLive-Windows-x64.zip
+          path: ${{ github.workspace }}/simple_live_app/SimpleLive-Windows-x64.zip
