@@ -2,14 +2,6 @@ name: Build Android & Windows
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ master ]   # 你也可以只保留 workflow_dispatch
-  pull_request:
-
-# 关键：让所有 shell 步骤默认在 simple_live_app/ 下运行
-defaults:
-  run:
-    working-directory: simple_live_app
 
 concurrency:
   group: build-${{ github.ref }}
@@ -36,40 +28,48 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: '3.35.7'   # 和 Windows 保持一致
           cache: true
-          # 如项目版本有要求，可以固定版本：
-          # flutter-version: '3.22.3'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses
+      - name: Install required Android SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "cmdline-tools;latest" \
+            "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager --licenses
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+        working-directory: simple_live_app
 
       - name: Flutter pub get
         run: flutter pub get
+        working-directory: simple_live_app
 
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
+      - name: Make gradlew executable (if exists)
+        run: |
+          set -e
+          if [ -f "simple_live_app/android/gradlew" ]; then
+            chmod +x simple_live_app/android/gradlew
+            echo "chmod on simple_live_app/android/gradlew"
+          elif [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+            echo "chmod on android/gradlew"
+          else
+            echo "No gradlew found; skipping."
+          fi
 
       - name: Build APK (debug)
         run: flutter build apk --debug --no-tree-shake-icons
+        working-directory: simple_live_app
 
       - name: Upload APK artifact (debug)
         uses: actions/upload-artifact@v4
         with:
           name: android-debug-apk
-          # 注意：upload-artifact 的 path 以仓库根为基准，这里写绝对些最稳妥
           path: ${{ github.workspace }}/simple_live_app/build/app/outputs/flutter-apk/app-debug.apk
-
-      - name: Build APK (profile)
-        run: flutter build apk --profile --no-tree-shake-icons
-
-      - name: Upload APK artifact (profile)
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-profile-apk
-          path: ${{ github.workspace }}/simple_live_app/build/app/outputs/flutter-apk/app-profile.apk
 
   windows:
     name: Windows x64 (release)
@@ -85,20 +85,24 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: '3.35.7'
           cache: true
-          # flutter-version: '3.22.3'
 
       - name: Enable Windows desktop
         run: flutter config --enable-windows-desktop
+        working-directory: simple_live_app
 
       - name: Flutter pub get
         run: flutter pub get
+        working-directory: simple_live_app
 
       - name: Build Windows (release)
         run: flutter build windows --release
+        working-directory: simple_live_app
 
       - name: Pack release folder to zip
         shell: pwsh
+        working-directory: simple_live_app
         run: |
           $outDir = "build/windows/x64/runner/Release"
           $zipPath = "SimpleLive-Windows-x64.zip"
