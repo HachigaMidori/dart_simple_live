@@ -17,20 +17,25 @@ tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
 
-// --- temp fix for AGP 8+: add namespace for plugins that don't define it ---
-subprojects { subproject ->
-    subproject.afterEvaluate {
-        def androidExt = subproject.extensions.findByName("android")
-        if (androidExt != null && !androidExt.hasProperty("namespace")) {
-            def map = [
-                "flutter_inappwebview": "com.pichillilorenzo.flutter_inappwebview",
-                "image_gallery_saver": "com.image.gallery.saver"
-            ]
-            def ns = map.containsKey(subproject.name)
-                    ? map[subproject.name]
-                    : "fix." + subproject.name.replace('_','.')
-            androidExt.namespace = ns
-            println("[fix] set namespace for ${subproject.path} -> ${androidExt.namespace}")
+
+// --- temp fix for AGP 8+: add namespace for old plugins without one ---
+// 不再使用 afterEvaluate，改为在插件应用时设置
+subprojects { p ->
+    if (p.name == "flutter_inappwebview" || p.name == "image_gallery_saver") {
+        p.plugins.withId("com.android.library") {
+            def androidExt = p.extensions.findByName("android")
+            if (androidExt != null) {
+                String ns = (p.name == "flutter_inappwebview")
+                        ? "com.pichillilorenzo.flutter_inappwebview"
+                        : "com.image.gallery.saver"
+                // 仅在没设置时补上，避免覆盖新版
+                if (!androidExt.hasProperty("namespace") ||
+                    androidExt.namespace == null ||
+                    androidExt.namespace.toString().trim().isEmpty()) {
+                    androidExt.namespace = ns
+                    println("[fix] set namespace for ${p.path} -> ${ns}")
+                }
+            }
         }
     }
 }
