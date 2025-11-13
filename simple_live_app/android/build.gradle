@@ -16,3 +16,21 @@ subprojects {
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
+
+// --- temp fix for AGP 8+: add namespace for plugins that don't define it ---
+subprojects { subproject ->
+    subproject.afterEvaluate {
+        def androidExt = subproject.extensions.findByName("android")
+        if (androidExt != null && !androidExt.hasProperty("namespace")) {
+            def map = [
+                "flutter_inappwebview": "com.pichillilorenzo.flutter_inappwebview",
+                "image_gallery_saver": "com.image.gallery.saver"
+            ]
+            def ns = map.containsKey(subproject.name)
+                    ? map[subproject.name]
+                    : "fix." + subproject.name.replace('_','.')
+            androidExt.namespace = ns
+            println("[fix] set namespace for ${subproject.path} -> ${androidExt.namespace}")
+        }
+    }
+}
