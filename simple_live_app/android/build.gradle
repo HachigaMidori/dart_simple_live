@@ -18,24 +18,39 @@ tasks.register("clean", Delete) {
 }
 
 
-// --- temp fix for AGP 8+: add namespace for old plugins without one ---
-// 不再使用 afterEvaluate，改为在插件应用时设置
+
+// --- universal fix for AGP 8+: set namespace for plugin modules that don't define it ---
+// Works on Gradle 8 / AGP 8; no afterEvaluate.
+import groovy.xml.XmlSlurper
+
 subprojects { p ->
-    if (p.name == "flutter_inappwebview" || p.name == "image_gallery_saver") {
-        p.plugins.withId("com.android.library") {
-            def androidExt = p.extensions.findByName("android")
-            if (androidExt != null) {
-                String ns = (p.name == "flutter_inappwebview")
-                        ? "com.pichillilorenzo.flutter_inappwebview"
-                        : "com.image.gallery.saver"
-                // 仅在没设置时补上，避免覆盖新版
-                if (!androidExt.hasProperty("namespace") ||
-                    androidExt.namespace == null ||
-                    androidExt.namespace.toString().trim().isEmpty()) {
-                    androidExt.namespace = ns
-                    println("[fix] set namespace for ${p.path} -> ${ns}")
-                }
-            }
-        }
+    // 对同时是 Android library 或 application 的子模块生效
+    p.plugins.withId("com.android.library")  { _fixNs(p) }
+    p.plugins.withId("com.android.application") { _fixNs(p) }
+}
+
+def _fixNs(Project p) {
+    def androidExt = p.extensions.findByName("android")
+    if (androidExt == null) return
+
+    def hasNs = androidExt.hasProperty("namespace") &&
+                androidExt.namespace != null &&
+                androidExt.namespace.toString().trim()
+    if (hasNs) return
+
+    // 优先从该模块的 AndroidManifest.xml 读取 package，作为 namespace
+    def manifest = new File(p.projectDir, "src/main/AndroidManifest.xml")
+    String ns = null
+    if (manifest.exists()) {
+        try {
+            def xml = new XmlSlurper(false, false).parse(manifest)
+            ns = (xml.@package?.text() ?: "").trim()
+        } catch (Exception ignore) { }
     }
+    if (!ns) {
+        // 兜底：用模块名生成一个合法的命名空间
+        ns = "fix." + p.name.replaceAll('[^A-Za-z0-9_]', '_').replace('_','.')
+    }
+    androidExt.namespace = ns
+    println("[fix] set namespace for ${p.path} -> ${ns}")
 }
