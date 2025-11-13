@@ -1,4 +1,4 @@
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart' show WebUri, URLRequest;
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/controller/base_controller.dart';
 import 'package:simple_live_app/app/log.dart';
